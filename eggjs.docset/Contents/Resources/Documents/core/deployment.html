@@ -1,0 +1,97 @@
+
+    <html>
+        <head>
+            <title>应用部署</title>
+            <meta charset="UTF-8">
+            <link rel="stylesheet" href="../index.css">
+        </head>
+        <body>
+        <article class="markdown-body">
+    <h1>应用部署</h1>
+    <p>在<a href="./development.html">本地开发</a>时，我们使用 <code>egg-bin dev</code> 来启动服务，但是在部署应用的时候不可以这样使用。因为 <code>egg-bin dev</code> 会针对本地开发做很多处理，而生产运行需要一个更加简单稳定的方式。所以本章主要讲解如何部署你的应用。</p>
+<p>一般从源码代码到真正运行，我们会拆分成构建和部署两步，可以做到<strong>一次构建多次部署</strong>。</p>
+<h2 id="构建"><a class="markdown-anchor" href="#构建">#</a> 构建</h2>
+<p>JavaScript 语言本身不需要编译的，构建过程主要是下载依赖。但如果使用 TypeScript 或者 Babel 支持 ES6 以上的特性，那就必须要这一步了。</p>
+<p>一般安装依赖会指定 <code>NODE_ENV=production</code> 或 <code>npm install --production</code> 只安装 dependencies 的依赖。因为 devDependencies 中的模块过大而且在生产环境不会使用，安装后也可能遇到未知问题。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ <span class="built_in">cd</span> baseDir</span><br/><span class="line">$ npm install --production</span><br/><span class="line">$ tar -zcvf ../release.tgz .</span><br/></pre></td></tr></table></figure>
+<p>构建完成后打包成 tgz 文件，部署的时候解压启动就可以了。</p>
+<p>增加构建环节才能做到真正的<strong>一次构建多次部署</strong>，理论上代码没有改动的时候是不需要再次构建的，可以用原来的包进行部署，这有着不少好处：</p>
+<ul>
+<li>构建依赖的环境和运行时是有差异的，所以不要污染运行时环境。</li>
+<li>可以减少发布的时间，而且易回滚，只需要把原来的包重新启动即可。</li>
+</ul>
+<h2 id="部署"><a class="markdown-anchor" href="#部署">#</a> 部署</h2>
+<p>服务器需要预装 Node.js，框架支持的 Node 版本为 <code>&gt;= 8.0.0</code>。</p>
+<p>框架内置了 <a href="https://github.com/eggjs/egg-cluster" target="_blank" rel="noopener">egg-cluster</a> 来启动 <a href="./cluster-and-ipc.html#master">Master 进程</a>，Master 有足够的稳定性，不再需要使用 <a href="https://github.com/Unitech/pm2" target="_blank" rel="noopener">pm2</a> 等进程守护模块。</p>
+<p>同时，框架也提供了 <a href="https://github.com/eggjs/egg-scripts" target="_blank" rel="noopener">egg-scripts</a> 来支持线上环境的运行和停止。</p>
+<p>首先，我们需要把 <code>egg-scripts</code> 模块作为 <code>dependencies</code> 引入：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ npm i egg-scripts --save</span><br/></pre></td></tr></table></figure>
+<p>添加 <code>npm scripts</code> 到 <code>package.json</code>：</p>
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line">{</span><br/><span class="line">  <span class="attr">"scripts"</span>: {</span><br/><span class="line">    <span class="attr">"start"</span>: <span class="string">"egg-scripts start --daemon"</span>,</span><br/><span class="line">    <span class="attr">"stop"</span>: <span class="string">"egg-scripts stop"</span></span><br/><span class="line">  }</span><br/><span class="line">}</span><br/></pre></td></tr></table></figure>
+<p>这样我们就可以通过 <code>npm start</code> 和 <code>npm stop</code> 命令启动或停止应用。</p>
+<blockquote>
+<p>注意：<code>egg-scripts</code> 对 Windows 系统的支持有限，参见 <a href="https://github.com/eggjs/egg-scripts/pull/22" target="_blank" rel="noopener">#22</a>。</p>
+</blockquote>
+<h3 id="启动命令"><a class="markdown-anchor" href="#启动命令">#</a> 启动命令</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ egg-scripts start --port=7001 --daemon --title=egg-server-showcase</span><br/></pre></td></tr></table></figure>
+<p>如上示例，支持以下参数：</p>
+<ul>
+<li><code>--port=7001</code> 端口号，默认会读取环境变量 <code>process.env.PORT</code>，如未传递将使用框架内置端口 <code>7001</code>。</li>
+<li><code>--daemon</code> 是否允许在后台模式，无需 <code>nohup</code>。若使用 Docker 建议直接前台运行。</li>
+<li><code>--env=prod</code> 框架运行环境，默认会读取环境变量 <code>process.env.EGG_SERVER_ENV</code>， 如未传递将使用框架内置环境 <code>prod</code>。</li>
+<li><code>--workers=2</code> 框架 worker 线程数，默认会创建和 CPU 核数相当的 app worker 数，可以充分的利用 CPU 资源。</li>
+<li><code>--title=egg-server-showcase</code> 用于方便 ps 进程时 grep 用，默认为 <code>egg-server-${appname}</code>。</li>
+<li><code>--framework=yadan</code> 如果应用使用了<a href="../advanced/framework.html">自定义框架</a>，可以配置 <code>package.json</code> 的 <code>egg.framework</code> 或指定该参数。</li>
+<li><code>--ignore-stderr</code> 忽略启动期的报错。</li>
+<li>所有 <a href="https://github.com/eggjs/egg-cluster" target="_blank" rel="noopener">egg-cluster</a> 的 Options 都支持透传，如 <code>--https</code> 等。</li>
+</ul>
+<p>更多参数可查看 <a href="https://github.com/eggjs/egg-scripts" target="_blank" rel="noopener">egg-scripts</a> 和 <a href="https://github.com/eggjs/egg-cluster" target="_blank" rel="noopener">egg-cluster</a> 文档。</p>
+<h4 id="启动配置项"><a class="markdown-anchor" href="#启动配置项">#</a> 启动配置项</h4>
+<p>你也可以在 <code>config.{env}.js</code> 中配置指定启动配置。</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="comment">// config/config.default.js</span></span><br/><span class="line"/><br/><span class="line">exports.cluster = {</span><br/><span class="line">  listen: {</span><br/><span class="line">    port: <span class="number">7001</span>,</span><br/><span class="line">    hostname: <span class="string">'127.0.0.1'</span>,</span><br/><span class="line">    <span class="comment">// path: '/var/run/egg.sock',</span></span><br/><span class="line">  }</span><br/><span class="line">}</span><br/></pre></td></tr></table></figure>
+<p><code>path</code>，<code>port</code>，<code>hostname</code> 均为 <a href="https://nodejs.org/api/http.html#http_server_listen_port_hostname_backlog_callback" target="_blank" rel="noopener">server.listen</a> 的参数，<code>egg-scripts</code> 和 <code>egg.startCluster</code> 方法传入的 port 优先级高于此配置。</p>
+<h3 id="停止命令"><a class="markdown-anchor" href="#停止命令">#</a> 停止命令</h3>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ egg-scripts stop [--title=egg-server]</span><br/></pre></td></tr></table></figure>
+<p>该命令将杀死 master 进程，并通知 worker 和 agent 优雅退出。</p>
+<p>支持以下参数：</p>
+<ul>
+<li><code>--title=egg-server</code> 用于杀死指定的 egg 应用，未传递则会终止所有的 Egg 应用。</li>
+</ul>
+<p>你也可以直接通过 <code>ps -eo "pid,command" | grep "--type=egg-server"</code> 来找到 master 进程，并 <code>kill</code> 掉，无需 <code>kill -9</code>。</p>
+<h2 id="监控"><a class="markdown-anchor" href="#监控">#</a> 监控</h2>
+<p>我们还需要对服务进行性能监控，内存泄露分析，故障排除等。</p>
+<p>业界常用的有：</p>
+<ul>
+<li><a href="https://www.aliyun.com/product/nodejs" target="_blank" rel="noopener">Node.js 性能平台（alinode）</a></li>
+<li><a href="https://nodesource.com/products/nsolid/" target="_blank" rel="noopener">NSolid</a></li>
+</ul>
+<h3 id="nodejs-性能平台alinode"><a class="markdown-anchor" href="#nodejs-性能平台alinode">#</a> Node.js 性能平台（alinode）</h3>
+<p><a href="https://www.aliyun.com/product/nodejs" target="_blank" rel="noopener">Node.js 性能平台</a> 是面向所有 Node.js 应用提供 <code>性能监控、安全提醒、故障排查、性能优化</code> 等服务的整体性解决方案，提供完善的工具链和服务，协助开发者快速发现和定位线上问题。</p>
+<h4 id="安装-runtime"><a class="markdown-anchor" href="#安装-runtime">#</a> 安装 Runtime</h4>
+<p>AliNode Runtime 可以直接替换掉 Node.js Runtime，对应版本参见<a href="https://help.aliyun.com/knowledge_detail/60811.html" target="_blank" rel="noopener">文档</a>。</p>
+<p>全局安装方式参见<a href="https://help.aliyun.com/document_detail/60338.html" target="_blank" rel="noopener">文档</a>。</p>
+<p>有时候，同机会部署多个项目，期望多版本共存时，则可以把 Runtime 安装到当前项目：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ npm i nodeinstall -g</span><br/><span class="line">$ nodeinstall --install-alinode ^3</span><br/></pre></td></tr></table></figure>
+<p><a href="https://github.com/cnpm/nodeinstall" target="_blank" rel="noopener">nodeinstall</a> 会把对应版本的 <code>alinode</code> 安装到项目的 <code>node_modules</code> 目录下。</p>
+<blockquote>
+<p>注意：打包机的操作系统和线上系统需保持一致，否则对应的 Runtime 不一定能正常运行。</p>
+</blockquote>
+<h4 id="安装及配置"><a class="markdown-anchor" href="#安装及配置">#</a> 安装及配置</h4>
+<p>我们提供了 <a href="https://github.com/eggjs/egg-alinode" target="_blank" rel="noopener">egg-alinode</a> 来快速接入，无需安装 <code>agenthub</code> 等额外的常驻服务。</p>
+<p><strong>安装依赖：</strong></p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ npm i egg-alinode --save</span><br/></pre></td></tr></table></figure>
+<p><strong>开启插件：</strong></p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="comment">// config/plugin.js</span></span><br/><span class="line">exports.alinode = {</span><br/><span class="line">  enable: <span class="literal">true</span>,</span><br/><span class="line">  package: <span class="string">'egg-alinode'</span>,</span><br/><span class="line">};</span><br/></pre></td></tr></table></figure>
+<p><strong>配置：</strong></p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="comment">// config/config.default.js</span></span><br/><span class="line">exports.alinode = {</span><br/><span class="line">  <span class="comment">// 从 `Node.js 性能平台` 获取对应的接入参数</span></span><br/><span class="line">  appid: <span class="string">'&lt;YOUR_APPID&gt;'</span>,</span><br/><span class="line">  secret: <span class="string">'&lt;YOUR_SECRET&gt;'</span>,</span><br/><span class="line">};</span><br/></pre></td></tr></table></figure>
+<h3 id="启动应用"><a class="markdown-anchor" href="#启动应用">#</a> 启动应用</h3>
+<p><code>npm scripts</code> 配置的 <code>start</code> 指令无需改变，通过 <code>egg-scripts</code> 即可。</p>
+<p>启动命令需使用 <code>npm start</code>，因为 <code>npm scripts</code> 执行时会把 <code>node_module/.bin</code> 目录加入 <code>PATH</code>，故会优先使用当前项目执行的 Node 版本。</p>
+<p>启动后会看到 master 日志包含以下内容：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">$ [master] node version v8.9.4</span><br/><span class="line">$ [master] alinode version v3.8.4</span><br/></pre></td></tr></table></figure>
+<h4 id="访问控制台"><a class="markdown-anchor" href="#访问控制台">#</a> 访问控制台</h4>
+<p>控制台地址：<a href="https://node.console.aliyun.com" target="_blank" rel="noopener">https://node.console.aliyun.com</a></p>
+
+  </article>
+        </body>
+    </html>

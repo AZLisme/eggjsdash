@@ -1,0 +1,63 @@
+
+    <html>
+        <head>
+            <title>Service</title>
+            <meta charset="UTF-8">
+            <link rel="stylesheet" href="../index.css">
+        </head>
+        <body>
+        <article class="markdown-body">
+    <h1>Service</h1>
+    <p>简单来说，Service 就是在复杂业务场景下用于做业务逻辑封装的一个抽象层，提供这个抽象有以下几个好处：</p>
+<ul>
+<li>保持 Controller 中的逻辑更加简洁。</li>
+<li>保持业务逻辑的独立性，抽象出来的 Service 可以被多个 Controller 重复调用。</li>
+<li>将逻辑和展现分离，更容易编写测试用例，测试用例的编写具体可以查看<a href="../core/unittest.html">这里</a>。</li>
+</ul>
+<h2 id="使用场景"><a class="markdown-anchor" href="#使用场景">#</a> 使用场景</h2>
+<ul>
+<li>复杂数据的处理，比如要展现的信息需要从数据库获取，还要经过一定的规则计算，才能返回用户显示。或者计算完成后，更新到数据库。</li>
+<li>第三方服务的调用，比如 GitHub 信息获取等。</li>
+</ul>
+<h2 id="定义-service"><a class="markdown-anchor" href="#定义-service">#</a> 定义 Service</h2>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="comment">// app/service/user.js</span></span><br/><span class="line"><span class="keyword">const</span> Service = <span class="built_in">require</span>(<span class="string">'egg'</span>).Service;</span><br/><span class="line"/><br/><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">UserService</span> <span class="keyword">extends</span> <span class="title">Service</span> </span>{</span><br/><span class="line">  <span class="keyword">async</span> find(uid) {</span><br/><span class="line">    <span class="keyword">const</span> user = <span class="keyword">await</span> <span class="keyword">this</span>.ctx.db.query(<span class="string">'select * from user where uid = ?'</span>, uid);</span><br/><span class="line">    <span class="keyword">return</span> user;</span><br/><span class="line">  }</span><br/><span class="line">}</span><br/><span class="line"/><br/><span class="line"><span class="built_in">module</span>.exports = UserService;</span><br/></pre></td></tr></table></figure>
+<h3 id="属性"><a class="markdown-anchor" href="#属性">#</a> 属性</h3>
+<p>每一次用户请求，框架都会实例化对应的 Service 实例，由于它继承于 <code>egg.Service</code>，故拥有下列属性方便我们进行开发：</p>
+<ul>
+<li><code>this.ctx</code>: 当前请求的上下文 <a href="./extend.html#context">Context</a> 对象的实例，通过它我们可以拿到框架封装好的处理当前请求的各种便捷属性和方法。</li>
+<li><code>this.app</code>: 当前应用 <a href="./extend.html#application">Application</a> 对象的实例，通过它我们可以拿到框架提供的全局对象和方法。</li>
+<li><code>this.service</code>：应用定义的 <a href="./service.html">Service</a>，通过它我们可以访问到其他业务层，等价于 <code>this.ctx.service</code> 。</li>
+<li><code>this.config</code>：应用运行时的<a href="./config.html">配置项</a>。</li>
+<li><code>this.logger</code>：logger 对象，上面有四个方法（<code>debug</code>，<code>info</code>，<code>warn</code>，<code>error</code>），分别代表打印四个不同级别的日志，使用方法和效果与 <a href="../core/logger.html#context-logger">context logger</a> 中介绍的一样，但是通过这个 logger 对象记录的日志，在日志前面会加上打印该日志的文件路径，以便快速定位日志打印位置。</li>
+</ul>
+<h3 id="service-ctx-详解"><a class="markdown-anchor" href="#service-ctx-详解">#</a> Service ctx 详解</h3>
+<p>为了可以获取用户请求的链路，我们在 Service 初始化中，注入了请求上下文, 用户在方法中可以直接通过 <code>this.ctx</code> 来获取上下文相关信息。关于上下文的具体详解可以参看 <a href="./extend.html#context">Context</a>,
+有了 ctx 我们可以拿到框架给我们封装的各种便捷属性和方法。比如我们可以用：</p>
+<ul>
+<li><code>this.ctx.curl</code> 发起网络调用。</li>
+<li><code>this.ctx.service.otherService</code> 调用其他 Service。</li>
+<li><code>this.ctx.db</code> 发起数据库调用等， db 可能是其他插件提前挂载到 app 上的模块。</li>
+</ul>
+<h3 id="注意事项"><a class="markdown-anchor" href="#注意事项">#</a> 注意事项</h3>
+<ul>
+<li>
+<p>Service 文件必须放在 <code>app/service</code> 目录，可以支持多级目录，访问的时候可以通过目录名级联访问。</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line">app/service/biz/user.js =&gt; ctx.service.biz.user</span><br/><span class="line">app/service/sync_user.js =&gt; ctx.service.syncUser</span><br/><span class="line">app/service/HackerNews.js =&gt; ctx.service.hackerNews</span><br/></pre></td></tr></table></figure>
+</li>
+<li>
+<p>一个 Service 文件只能包含一个类， 这个类需要通过 <code>module.exports</code> 的方式返回。</p>
+</li>
+<li>
+<p>Service 需要通过 Class 的方式定义，父类必须是 <code>egg.Service</code>。</p>
+</li>
+<li>
+<p>Service 不是单例，是 <strong>请求级别</strong> 的对象，框架在每次请求中首次访问 <code>ctx.service.xx</code> 时延迟实例化，所以 Service 中可以通过 this.ctx 获取到当前请求的上下文。</p>
+</li>
+</ul>
+<h2 id="使用-service"><a class="markdown-anchor" href="#使用-service">#</a> 使用 Service</h2>
+<p>下面就通过一个完整的例子，看看怎么使用 Service。</p>
+<figure class="highlight js"><table><tr><td class="code"><pre><span class="line"><span class="comment">// app/router.js</span></span><br/><span class="line"><span class="built_in">module</span>.exports = <span class="function"><span class="params">app</span> =&gt;</span> {</span><br/><span class="line">  app.router.get(<span class="string">'/user/:id'</span>, app.controller.user.info);</span><br/><span class="line">};</span><br/><span class="line"/><br/><span class="line"><span class="comment">// app/controller/user.js</span></span><br/><span class="line"><span class="keyword">const</span> Controller = <span class="built_in">require</span>(<span class="string">'egg'</span>).Controller;</span><br/><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">UserController</span> <span class="keyword">extends</span> <span class="title">Controller</span> </span>{</span><br/><span class="line">  <span class="keyword">async</span> info() {</span><br/><span class="line">    <span class="keyword">const</span> userId = ctx.params.id;</span><br/><span class="line">    <span class="keyword">const</span> userInfo = <span class="keyword">await</span> ctx.service.user.find(userId);</span><br/><span class="line">    ctx.body = userInfo;</span><br/><span class="line">  }</span><br/><span class="line">}</span><br/><span class="line"><span class="built_in">module</span>.exports = UserController;</span><br/><span class="line"/><br/><span class="line"><span class="comment">// app/service/user.js</span></span><br/><span class="line"><span class="keyword">const</span> Service = <span class="built_in">require</span>(<span class="string">'egg'</span>).Service;</span><br/><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">UserService</span> <span class="keyword">extends</span> <span class="title">Service</span> </span>{</span><br/><span class="line">  <span class="comment">// 默认不需要提供构造函数。</span></span><br/><span class="line">  <span class="comment">// constructor(ctx) {</span></span><br/><span class="line">  <span class="comment">//   super(ctx); 如果需要在构造函数做一些处理，一定要有这句话，才能保证后面 `this.ctx`的使用。</span></span><br/><span class="line">  <span class="comment">//   // 就可以直接通过 this.ctx 获取 ctx 了</span></span><br/><span class="line">  <span class="comment">//   // 还可以直接通过 this.app 获取 app 了</span></span><br/><span class="line">  <span class="comment">// }</span></span><br/><span class="line">  <span class="keyword">async</span> find(uid) {</span><br/><span class="line">    <span class="comment">// 假如 我们拿到用户 id 从数据库获取用户详细信息</span></span><br/><span class="line">    <span class="keyword">const</span> user = <span class="keyword">await</span> <span class="keyword">this</span>.ctx.db.query(<span class="string">'select * from user where uid = ?'</span>, uid);</span><br/><span class="line"/><br/><span class="line">    <span class="comment">// 假定这里还有一些复杂的计算，然后返回需要的信息。</span></span><br/><span class="line">    <span class="keyword">const</span> picture = <span class="keyword">await</span> <span class="keyword">this</span>.getPicture(uid);</span><br/><span class="line"/><br/><span class="line">    <span class="keyword">return</span> {</span><br/><span class="line">      name: user.user_name,</span><br/><span class="line">      age: user.age,</span><br/><span class="line">      picture,</span><br/><span class="line">    };</span><br/><span class="line">  }</span><br/><span class="line"/><br/><span class="line">  <span class="keyword">async</span> getPicture(uid) {</span><br/><span class="line">    <span class="keyword">const</span> result = <span class="keyword">await</span> <span class="keyword">this</span>.ctx.curl(<span class="string">`http://photoserver/uid=<span class="subst">${uid}</span>`</span>, { <span class="attr">dataType</span>: <span class="string">'json'</span> });</span><br/><span class="line">    <span class="keyword">return</span> result.data;</span><br/><span class="line">  }</span><br/><span class="line">}</span><br/><span class="line"><span class="built_in">module</span>.exports = UserService;</span><br/><span class="line"/><br/><span class="line"><span class="comment">// curl http://127.0.0.1:7001/user/1234</span></span><br/></pre></td></tr></table></figure>
+
+  </article>
+        </body>
+    </html>
