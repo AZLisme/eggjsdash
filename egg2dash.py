@@ -15,7 +15,8 @@ import requests_html
 
 CACHE_DIR = 'cache'
 SAVE_DIR = 'eggjs.docset/Contents/Resources/Documents'
-BASE_URL = 'https://eggjs.org/zh-cn/'
+BASE_URL = 'https://eggjs.org/en/'
+BASE_URL_CN = 'https://eggjs.org/zh-cn/'
 THREAD_POOL_SIZE = 8
 
 THREADPOOL = ThreadPoolExecutor(max_workers=THREAD_POOL_SIZE)
